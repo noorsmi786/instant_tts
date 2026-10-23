@@ -1,0 +1,14 @@
+# Vapi Custom TTS Server — .gitignore
+.env
+venv311/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+uploads/*/
+tests/output/
+*.log

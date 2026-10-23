@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vapi TTS Preview — Chatterbox-Nano</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117; color: #e2e8f0;
+      min-height: 100vh; padding: 2rem;
+    }
+    .container { max-width: 780px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; color: #f0f4ff; }
+    .subtitle { font-size: 0.875rem; color: #64748b; margin-bottom: 2rem; }
+    .badge {
+      display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;
+    }
+    .badge-ready   { background: #14532d; color: #86efac; }
+    .badge-loading { background: #422006; color: #fdba74; }
+    .badge-error   { background: #450a0a; color: #fca5a5; }
+
+    .card {
+      background: #1e2130; border-radius: 0.75rem; padding: 1.5rem;
+      margin-bottom: 1.5rem; border: 1px solid #2d3148;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #a5b4fc; }
+
+    label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem; }
+    select, textarea, input[type=file] {
+      width: 100%; background: #0f1117; border: 1px solid #374151;
+      border-radius: 0.5rem; color: #e2e8f0; padding: 0.5rem 0.75rem;
+      font-size: 0.875rem; outline: none; margin-bottom: 1rem;
+    }
+    select:focus, textarea:focus { border-color: #6366f1; }
+    textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+
+    .row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+    .field { flex: 1; min-width: 120px; }
+
+    button {
+      background: #4f46e5; color: #fff; border: none; border-radius: 0.5rem;
+      padding: 0.55rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s;
+      white-space: nowrap;
+    }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+    .btn-danger { background: #b91c1c; }
+    .btn-danger:hover { background: #991b1b; }
+    .btn-sm { padding: 0.35rem 0.85rem; font-size: 0.78rem; }
+
+    .audio-player {
+      width: 100%; margin-top: 0.75rem; border-radius: 0.5rem;
+      accent-color: #6366f1;
+    }
+    .metrics {
+      font-size: 0.78rem; color: #64748b; margin-top: 0.5rem;
+      display: flex; gap: 1rem; flex-wrap: wrap;
+    }
+    .metrics span { color: #94a3b8; }
+    .metrics .val { color: #a5b4fc; font-weight: 600; }
+
+    .status-bar {
+      font-size: 0.8rem; padding: 0.5rem 0.75rem; border-radius: 0.4rem;
+      margin-top: 0.75rem; display: none;
+    }
+    .status-bar.show { display: block; }
+    .status-bar.ok  { background: #14532d; color: #86efac; }
+    .status-bar.err { background: #450a0a; color: #fca5a5; }
+    .status-bar.info { background: #1e3a5f; color: #93c5fd; }
+
+    .file-list { list-style: none; margin-top: 0.5rem; }
+    .file-list li {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.35rem 0; border-bottom: 1px solid #2d3148; font-size: 0.82rem;
+    }
+    .file-list li:last-child { border-bottom: none; }
+    .file-list .actions { display: flex; gap: 0.5rem; }
+    .active-indicator { color: #86efac; font-size: 0.75rem; margin-left: 0.5rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>
+    🎙️ Vapi TTS Preview
+    <span id="status-badge" class="badge badge-loading">Loading…</span>
+  </h1>
+  <p class="subtitle">Local preview interface · Chatterbox-Nano · localhost only</p>
+
+  <!-- ── Synthesis ─────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>🔊 Speech Synthesis</h2>
+
+    <div class="row">
+      <div class="field" style="flex:3">
+        <label>Select Voice (Default or Cloned Custom Voice)</label>
+        <select id="voice-select" onchange="onVoiceChanged()">
+          <option value="default">Default Model Voice (Standard)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sample Rate</label>
+        <select id="sample-rate">
+          <option value="24000" selected>24000 Hz</option>
+          <option value="22050">22050 Hz</option>
+          <option value="16000">16000 Hz</option>
+          <option value="8000">8000 Hz</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Text to speak</label>
+    <textarea id="tts-text" rows="3" placeholder="Enter text here…">Hello! I am your AI voice assistant, powered by Chatterbox Nano and Vapi.</textarea>
+
+    <button id="synthesize-btn" onclick="synthesize()">▶ Synthesize</button>
+
+    <div id="synth-status" class="status-bar"></div>
+    <audio id="audio-player" class="audio-player" controls style="display:none"></audio>
+    <div class="metrics" id="metrics-row" style="display:none">
+      <div>Duration: <span class="val" id="m-dur">—</span></div>
+      <div>Gen time: <span class="val" id="m-gen">—</span></div>
+      <div>RTF: <span class="val" id="m-rtf">—</span></div>
+      <div>Total: <span class="val" id="m-total">—</span></div>
+    </div>
+  </div>
+
+  <!-- ── Voice Cloning ─────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>🔁 Voice Cloning — Reference Audio</h2>
+    <p style="font-size:0.82rem;color:#64748b;margin-bottom:1rem;">
+      Upload a 10–20 second WAV/MP3 of the target voice (clear speech, no music).
+      After uploading, it is immediately available in the <strong>Select Voice</strong> dropdown above!
+    </p>
+
+    <div class="row">
+      <div class="field" style="flex:3">
+        <label>Profile</label>
+        <select id="upload-profile-select" onchange="loadVoicesAndFiles()"></select>
+      </div>
+      <div class="field" style="flex:2">
+        <label>Audio file (WAV or MP3)</label>
+        <input type="file" id="audio-file-input" accept=".wav,.mp3,.flac,.ogg,.m4a" />
+      </div>
+    </div>
+    <button onclick="uploadAudio()">⬆ Upload & Add Voice</button>
+    <div id="upload-status" class="status-bar"></div>
+
+    <div style="margin-top:1.25rem">
+      <label>Uploaded Custom Voices</label>
+      <button class="btn-sm" style="margin-bottom:0.5rem" onclick="loadVoicesAndFiles()">🔄 Refresh list</button>
+      <ul class="file-list" id="file-list"><li style="color:#64748b;font-size:0.8rem">Loading voices…</li></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = '';  // same origin
+
+// ── Health check ────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const badge = document.getElementById('status-badge');
+  try {
+    const r = await fetch(`${BASE}/health`);
+    const d = await r.json();
+    if (r.ok && d.status === 'ready') {
+      badge.textContent = 'Ready (' + d.model + ')';
+      badge.className = 'badge badge-ready';
+      await loadProfiles();
+      await loadVoicesAndFiles();
+    } else {
+      badge.textContent = 'Loading model…';
+      badge.className = 'badge badge-loading';
+      setTimeout(checkHealth, 2000);
+    }
+  } catch(e) {
+    badge.textContent = 'Unreachable';
+    badge.className = 'badge badge-error';
+    setTimeout(checkHealth, 3000);
+  }
+}
+
+// ── Load profiles ────────────────────────────────────────────────────────────
+async function loadProfiles() {
+  try {
+    const r = await fetch(`${BASE}/admin/profiles`);
+    if (!r.ok) return;
+    const profiles = await r.json();
+    const uSel = document.getElementById('upload-profile-select');
+    uSel.innerHTML = '';
+    profiles.forEach(p => {
+      const opt = `<option value="${p.profile_id}">${p.profile_id} — ${p.display_name}</option>`;
+      uSel.insertAdjacentHTML('beforeend', opt);
+    });
+  } catch(e) {}
+}
+
+// ── Load voices into dropdown and list ────────────────────────────────────────
+async function loadVoicesAndFiles() {
+  const profile = document.getElementById('upload-profile-select').value || 'client_default';
+  const voiceSel = document.getElementById('voice-select');
+  const list = document.getElementById('file-list');
+
+  try {
+    const r = await fetch(`${BASE}/admin/voices?profile_id=${profile}`);
+    if (!r.ok) throw new Error('Failed to fetch voices');
+    const voices = await r.json();
+
+    // Populate the dropdown
+    const currentSelected = voiceSel.value;
+    voiceSel.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.name + (v.is_active ? ' (Active for Vapi)' : '');
+      if (v.id === currentSelected || (currentSelected === '' && v.is_active)) {
+        opt.selected = true;
+      }
+      voiceSel.appendChild(opt);
+    });
+
+    // Populate file list below
+    list.innerHTML = '';
+    const customVoices = voices.filter(v => v.id !== 'default');
+    if (customVoices.length === 0) {
+      list.innerHTML = '<li style="color:#64748b;font-size:0.8rem">No custom voices uploaded yet. Select an audio file above and click Upload.</li>';
+      return;
+    }
+
+    customVoices.forEach(f => {
+      const li = document.createElement('li');
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      li.style.alignItems = 'center';
+      li.style.padding = '0.5rem 0';
+      li.style.borderBottom = '1px solid #334155';
+
+      li.innerHTML = `
+        <span>
+          <strong>${f.filename}</strong>
+          ${f.is_active ? '<span class="active-indicator" style="background:#065f46;color:#34d399;padding:2px 8px;border-radius:999px;font-size:0.75rem;margin-left:8px;">✅ Active Voice for Vapi</span>' : ''}
+        </span>
+        <div class="actions" style="display:flex;gap:6px;">
+          ${!f.is_active ? `<button class="btn-sm" style="background:#2563eb;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;" onclick="activateFile('${profile}', '${f.filename}')">Set as Active</button>` : `<button class="btn-sm btn-danger" style="background:#dc2626;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;" onclick="clearReference('${profile}')">Deactivate</button>`}
+          <button class="btn-sm" style="background:#475569;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;" onclick="deleteFile('${profile}', '${f.filename}')">🗑️</button>
+        </div>`;
+      list.appendChild(li);
+    });
+  } catch(e) {
+    list.innerHTML = `<li style="color:#fca5a5">Could not load voices: ${e.message}</li>`;
+  }
+}
+
+async function onVoiceChanged() {
+  const voiceId = document.getElementById('voice-select').value;
+  const profile = document.getElementById('upload-profile-select').value || 'client_default';
+  // If user selected a voice in dropdown, automatically set it active
+  if (voiceId && voiceId !== 'default') {
+    await fetch(`${BASE}/admin/activate/${profile}/${encodeURIComponent(voiceId)}`, {method:'POST'});
+  } else {
+    await fetch(`${BASE}/admin/reference/${profile}`, {method:'DELETE'});
+  }
+  await loadVoicesAndFiles();
+}
+
+// ── Synthesize ───────────────────────────────────────────────────────────────
+async function synthesize() {
+  const btn = document.getElementById('synthesize-btn');
+  const status = document.getElementById('synth-status');
+  const audio = document.getElementById('audio-player');
+  const text = document.getElementById('tts-text').value.trim();
+  const rate = parseInt(document.getElementById('sample-rate').value);
+  const profile = document.getElementById('upload-profile-select').value || 'client_default';
+  const voiceId = document.getElementById('voice-select').value;
+
+  if (!text) { showStatus(status, 'Please enter some text.', 'err'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Synthesizing…';
+  showStatus(status, `Synthesizing with ${voiceId === 'default' ? 'standard voice' : voiceId}…`, 'info');
+  audio.style.display = 'none';
+  document.getElementById('metrics-row').style.display = 'none';
+
+  const t0 = performance.now();
+  try {
+    const r = await fetch(`${BASE}/preview/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, sampleRate: rate, profileId: profile, voiceId: voiceId }),
+    });
+
+    if (!r.ok) {
+      const err = await r.text();
+      showStatus(status, `Error ${r.status}: ${err}`, 'err');
+      return;
+    }
+
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    audio.src = url;
+    audio.style.display = 'block';
+    audio.play();
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    const dur = r.headers.get('x-audio-duration') || '?';
+    const gen = r.headers.get('x-generation-ms') || '?';
+    const rtf = r.headers.get('x-rtf') || '?';
+    document.getElementById('m-dur').textContent = dur + 's';
+    document.getElementById('m-gen').textContent = gen + 'ms';
+    document.getElementById('m-rtf').textContent = rtf;
+    document.getElementById('m-total').textContent = elapsed + 's';
+    document.getElementById('metrics-row').style.display = 'flex';
+
+    showStatus(status, '✅ Synthesis complete!', 'ok');
+  } catch(e) {
+    showStatus(status, 'Network error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Synthesize';
+  }
+}
+
+// ── Upload reference audio ────────────────────────────────────────────────────
+async function uploadAudio() {
+  const status = document.getElementById('upload-status');
+  const fileInput = document.getElementById('audio-file-input');
+  const profile = document.getElementById('upload-profile-select').value;
+
+  if (!fileInput.files.length) {
+    showStatus(status, 'Select an audio file first.', 'err');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+
+  showStatus(status, 'Uploading and activating voice…', 'info');
+
+  try {
+    const r = await fetch(`${BASE}/admin/upload/${profile}`, {
+      method: 'POST', body: formData,
+    });
+    const d = await r.json();
+    if (r.ok) {
+      showStatus(status, `✅ ${d.filename} uploaded and added to voices!`, 'ok');
+      await loadVoicesAndFiles();
+    } else {
+      showStatus(status, `Error ${r.status}: ${JSON.stringify(d.detail)}`, 'err');
+    }
+  } catch(e) {
+    showStatus(status, 'Upload failed: ' + e.message, 'err');
+  }
+}
+
+// ── Activate / delete files ───────────────────────────────────────────────────
+async function activateFile(profileId, filename) {
+  const status = document.getElementById('upload-status');
+  const r = await fetch(`${BASE}/admin/activate/${profileId}/${encodeURIComponent(filename)}`, {method:'POST'});
+  const d = await r.json();
+  if (r.ok) {
+    showStatus(status, `✅ ${filename} activated for cloning!`, 'ok');
+    await loadVoicesAndFiles();
+  } else {
+    showStatus(status, `Error: ${JSON.stringify(d.detail)}`, 'err');
+  }
+}
+
+async function deleteFile(profileId, filename) {
+  if (!confirm(`Delete ${filename}?`)) return;
+  const status = document.getElementById('upload-status');
+  const r = await fetch(`${BASE}/admin/file/${profileId}/${encodeURIComponent(filename)}`, {method:'DELETE'});
+  const d = await r.json();
+  if (r.ok) {
+    showStatus(status, `🗑️ Deleted: ${filename}`, 'ok');
+    await loadVoicesAndFiles();
+  } else {
+    showStatus(status, `Error: ${JSON.stringify(d.detail)}`, 'err');
+  }
+}
+
+async function clearReference(profileId) {
+  if (!confirm('Remove voice cloning reference? Will revert to default voice.')) return;
+  const status = document.getElementById('upload-status');
+  const r = await fetch(`${BASE}/admin/reference/${profileId}`, {method:'DELETE'});
+  const d = await r.json();
+  if (r.ok) {
+    showStatus(status, 'Cloning reference removed. Using default voice.', 'ok');
+    await loadVoicesAndFiles();
+  } else {
+    showStatus(status, `Error: ${JSON.stringify(d.detail)}`, 'err');
+  }
+}
+
+async function loadFileList() {
+  const profile = document.getElementById('upload-profile-select').value;
+  const list = document.getElementById('file-list');
+  try {
+    const r = await fetch(`${BASE}/admin/files/${profile}`);
+    if (!r.ok) throw new Error('Failed to fetch files');
+    const files = await r.json();
+
+    list.innerHTML = '';
+    if (files.length === 0) {
+      list.innerHTML = '<li style="color:#64748b;font-size:0.8rem">No audio files uploaded yet. Choose a file above and click Upload.</li>';
+      return;
+    }
+
+    files.forEach(f => {
+      const li = document.createElement('li');
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      li.style.alignItems = 'center';
+      li.style.padding = '0.5rem 0';
+      li.style.borderBottom = '1px solid #334155';
+
+      li.innerHTML = `
+        <span>
+          <strong>${f.filename}</strong>
+          ${f.is_active ? '<span class="active-indicator" style="background:#065f46;color:#34d399;padding:2px 8px;border-radius:999px;font-size:0.75rem;margin-left:8px;">✅ Active Voice</span>' : ''}
+        </span>
+        <div class="actions" style="display:flex;gap:6px;">
+          ${!f.is_active ? `<button class="btn-sm" style="background:#2563eb;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;" onclick="activateFile('${profile}', '${f.filename}')">Activate</button>` : `<button class="btn-sm btn-danger" style="background:#dc2626;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;" onclick="clearReference('${profile}')">Deactivate</button>`}
+          <button class="btn-sm" style="background:#475569;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;" onclick="deleteFile('${profile}', '${f.filename}')">🗑️</button>
+        </div>`;
+      list.appendChild(li);
+    });
+  } catch(e) {
+    list.innerHTML = `<li style="color:#fca5a5">Could not load file list: ${e.message}</li>`;
+  }
+}
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+function showStatus(el, msg, type) {
+  el.textContent = msg;
+  el.className = `status-bar show ${type}`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+checkHealth();
+</script>
+</body>
+</html>
